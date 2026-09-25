@@ -81,7 +81,7 @@ public final class DateUtils {
 
     /** 返回指定时区的当前日期时间。 */
     public static LocalDateTime now(ZoneId zone) {
-        return LocalDateTime.now(Objects.requireNonNull(zone, "zone must not be null"));
+        return LocalDateTime.now(Objects.requireNonNull(zone, "参数 zone 不能为 null"));
     }
 
     // ------------------------------------------------------------------
@@ -292,17 +292,17 @@ public final class DateUtils {
 
     /** 判断 {@code dateTime} 是否落在 {@code [start, end]} 闭区间内。 */
     public static boolean isBetween(LocalDateTime dateTime, LocalDateTime start, LocalDateTime end) {
-        Objects.requireNonNull(dateTime, "dateTime must not be null");
-        Objects.requireNonNull(start, "start must not be null");
-        Objects.requireNonNull(end, "end must not be null");
+        Objects.requireNonNull(dateTime, "参数 dateTime 不能为 null");
+        Objects.requireNonNull(start, "参数 start 不能为 null");
+        Objects.requireNonNull(end, "参数 end 不能为 null");
         return !dateTime.isBefore(start) && !dateTime.isAfter(end);
     }
 
     /** 判断目标日期是否在起始日期之后、结束日期之前（含首尾）。 */
     public static boolean isBetween(LocalDate date, LocalDate start, LocalDate end) {
-        Objects.requireNonNull(date, "date must not be null");
-        Objects.requireNonNull(start, "start must not be null");
-        Objects.requireNonNull(end, "end must not be null");
+        Objects.requireNonNull(date, "参数 date 不能为 null");
+        Objects.requireNonNull(start, "参数 start 不能为 null");
+        Objects.requireNonNull(end, "参数 end 不能为 null");
         return date.compareTo(start) >= 0 && date.compareTo(end) <= 0;
     }
 
@@ -374,10 +374,10 @@ public final class DateUtils {
      */
     public static boolean isOverlap(LocalDateTime startOne, LocalDateTime endOne,
                                     LocalDateTime startTwo, LocalDateTime endTwo) {
-        Objects.requireNonNull(startOne, "startOne must not be null");
-        Objects.requireNonNull(endOne, "endOne must not be null");
-        Objects.requireNonNull(startTwo, "startTwo must not be null");
-        Objects.requireNonNull(endTwo, "endTwo must not be null");
+        Objects.requireNonNull(startOne, "参数 startOne 不能为 null");
+        Objects.requireNonNull(endOne, "参数 endOne 不能为 null");
+        Objects.requireNonNull(startTwo, "参数 startTwo 不能为 null");
+        Objects.requireNonNull(endTwo, "参数 endTwo 不能为 null");
         if (startOne.isAfter(endOne) || startTwo.isAfter(endTwo)) {
             throw new IllegalArgumentException("时间段的起始时刻不能晚于结束时刻");
         }
@@ -414,7 +414,7 @@ public final class DateUtils {
 
     /** 按格式串取（并缓存）{@link DateTimeFormatter}。 */
     private static DateTimeFormatter formatterOf(String pattern) {
-        Objects.requireNonNull(pattern, "pattern must not be null");
+        Objects.requireNonNull(pattern, "参数 pattern 不能为 null");
         DateTimeFormatter cached = FORMATTER_CACHE.get(pattern);
         if (cached != null) {
             return cached;
@@ -427,7 +427,7 @@ public final class DateUtils {
     /** 校验非空并原样返回，便于在表达式中直接使用。 */
     private static <T> T requireNonNull(T value, String name) {
         if (value == null) {
-            throw new NullPointerException(name + " must not be null");
+            throw new NullPointerException("参数 " + name + " 不能为 null");
         }
         return value;
     }
@@ -435,7 +435,7 @@ public final class DateUtils {
     /** 校验字符串非空并去掉首尾空格。 */
     private static String trimAndRequire(String text, String name) {
         if (text == null) {
-            throw new NullPointerException(name + " must not be null");
+            throw new NullPointerException("参数 " + name + " 不能为 null");
         }
         return text.trim();
     }
