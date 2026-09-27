@@ -59,6 +59,10 @@ public final class DateUtils {
     /**
      * {@link DateTimeFormatter} 是不可变且线程安全的，这里按格式串缓存，
      * 避免每次格式化都重新解析 pattern 造成不必要的开销。
+     *
+     * <p>注意：缓存没有容量上限。本项目里 pattern 都是代码内的常量，量级有限没有问题；
+     * 如果 pattern 来自外部输入，就要警惕被恶意构造的大量不同 pattern 撑爆内存，
+     * 那时应换成有界缓存（如 LRU）。
      */
     private static final Map<String, DateTimeFormatter> FORMATTER_CACHE = new ConcurrentHashMap<String, DateTimeFormatter>();
 
@@ -81,7 +85,7 @@ public final class DateUtils {
 
     /** 返回指定时区的当前日期时间。 */
     public static LocalDateTime now(ZoneId zone) {
-        return LocalDateTime.now(Objects.requireNonNull(zone, "参数 zone 不能为 null"));
+        return LocalDateTime.now(requireNonNull(zone, "zone"));
     }
 
     // ------------------------------------------------------------------
@@ -149,7 +153,7 @@ public final class DateUtils {
      * @throws java.time.format.DateTimeParseException 字符串与格式不匹配时抛出
      */
     public static LocalDate parseDate(String text, String pattern) {
-        return LocalDate.parse(trimAndRequire(text, "text"), formatterOf(pattern));
+        return LocalDate.parse(requireNonNull(text, "text").trim(), formatterOf(pattern));
     }
 
     /**
@@ -167,7 +171,7 @@ public final class DateUtils {
      * @throws java.time.format.DateTimeParseException 字符串与格式不匹配时抛出
      */
     public static LocalDateTime parseDateTime(String text, String pattern) {
-        return LocalDateTime.parse(trimAndRequire(text, "text"), formatterOf(pattern));
+        return LocalDateTime.parse(requireNonNull(text, "text").trim(), formatterOf(pattern));
     }
 
     /**
@@ -179,6 +183,11 @@ public final class DateUtils {
 
     // ------------------------------------------------------------------
     // 时间戳互转（基于系统默认时区）
+    //
+    // 注意：时间戳本身是世界统一的「时刻」，但时刻要落到某个时区才有年月日，
+    // 本节全部使用系统默认时区，同一台机器上来回转换是可逆的；
+    // 跨时区部署或多时区数据请显式传 ZoneId（如 dateTime.atZone(zone).toInstant()），
+    // 不要依赖默认时区——换了台机器结果就可能不同。
     // ------------------------------------------------------------------
 
     /** 日期时间转毫秒时间戳。 */
@@ -292,17 +301,17 @@ public final class DateUtils {
 
     /** 判断 {@code dateTime} 是否落在 {@code [start, end]} 闭区间内。 */
     public static boolean isBetween(LocalDateTime dateTime, LocalDateTime start, LocalDateTime end) {
-        Objects.requireNonNull(dateTime, "参数 dateTime 不能为 null");
-        Objects.requireNonNull(start, "参数 start 不能为 null");
-        Objects.requireNonNull(end, "参数 end 不能为 null");
+        requireNonNull(dateTime, "dateTime");
+        requireNonNull(start, "start");
+        requireNonNull(end, "end");
         return !dateTime.isBefore(start) && !dateTime.isAfter(end);
     }
 
     /** 判断目标日期是否在起始日期之后、结束日期之前（含首尾）。 */
     public static boolean isBetween(LocalDate date, LocalDate start, LocalDate end) {
-        Objects.requireNonNull(date, "参数 date 不能为 null");
-        Objects.requireNonNull(start, "参数 start 不能为 null");
-        Objects.requireNonNull(end, "参数 end 不能为 null");
+        requireNonNull(date, "date");
+        requireNonNull(start, "start");
+        requireNonNull(end, "end");
         return date.compareTo(start) >= 0 && date.compareTo(end) <= 0;
     }
 
@@ -343,11 +352,22 @@ public final class DateUtils {
     }
 
     /**
-     * 按指定基准日期计算周岁年龄。
+     * 按指定基准日期计算周岁年龄，规则为「生日已过则加一岁」，由 {@link Period} 自动处理。
+     *
+     * @param birthday      生日
+     * @param referenceDate 基准日期，通常是当天
+     * @return 周岁年龄
+     * @throws IllegalArgumentException 生日晚于基准日期时抛出：
+     *         未来人的年龄是负数，只会把错误悄悄带进下游统计，不如在调用现场暴露
      */
     public static int age(LocalDate birthday, LocalDate referenceDate) {
-        return Period.between(requireNonNull(birthday, "birthday"), requireNonNull(referenceDate, "referenceDate"))
-                .getYears();
+        Period period = Period.between(requireNonNull(birthday, "birthday"),
+                requireNonNull(referenceDate, "referenceDate"));
+        if (period.isNegative()) {
+            throw new IllegalArgumentException(
+                    "生日 " + birthday + " 不能晚于基准日期 " + referenceDate);
+        }
+        return period.getYears();
     }
 
     // ------------------------------------------------------------------
@@ -374,10 +394,10 @@ public final class DateUtils {
      */
     public static boolean isOverlap(LocalDateTime startOne, LocalDateTime endOne,
                                     LocalDateTime startTwo, LocalDateTime endTwo) {
-        Objects.requireNonNull(startOne, "参数 startOne 不能为 null");
-        Objects.requireNonNull(endOne, "参数 endOne 不能为 null");
-        Objects.requireNonNull(startTwo, "参数 startTwo 不能为 null");
-        Objects.requireNonNull(endTwo, "参数 endTwo 不能为 null");
+        requireNonNull(startOne, "startOne");
+        requireNonNull(endOne, "endOne");
+        requireNonNull(startTwo, "startTwo");
+        requireNonNull(endTwo, "endTwo");
         if (startOne.isAfter(endOne) || startTwo.isAfter(endTwo)) {
             throw new IllegalArgumentException("时间段的起始时刻不能晚于结束时刻");
         }
@@ -386,8 +406,18 @@ public final class DateUtils {
 
     /**
      * 把秒数格式化成 {@code HH:mm:ss}，超过 24 小时的部分会继续累加小时。
+     *
+     * <p>不接受负数：负数的整除与取余都向零取整，{@code -10} 会拼出
+     * {@code 00:00:-10} 这种畸形结果，直接拒绝比悄悄出错好。
+     *
+     * @param seconds 秒数，不能为负
+     * @return {@code HH:mm:ss} 形式的时长文本
+     * @throws IllegalArgumentException seconds 为负数时抛出
      */
     public static String formatSeconds(long seconds) {
+        if (seconds < 0) {
+            throw new IllegalArgumentException("秒数不能为负数，实际传入：" + seconds);
+        }
         long hours = seconds / 3600;
         long minutes = seconds % 3600 / 60;
         long remainSeconds = seconds % 60;
@@ -412,16 +442,21 @@ public final class DateUtils {
     // 内部辅助方法
     // ------------------------------------------------------------------
 
-    /** 按格式串取（并缓存）{@link DateTimeFormatter}。 */
+    /**
+     * 按格式串取（并缓存）{@link DateTimeFormatter}。
+     *
+     * <p>用 {@code computeIfAbsent} 而不是 get + putIfAbsent 的组合：
+     * 一次原子调用完成「查缓存，缺失时创建并放入」，并发竞争时不会白白创建
+     * 一个随后被丢弃的 formatter，代码也更短。pattern 非法时 {@code ofPattern}
+     * 抛出的 {@link IllegalArgumentException} 会让条目不进缓存，异常原样向上传播，
+     * 行为正好正确。
+     */
     private static DateTimeFormatter formatterOf(String pattern) {
-        Objects.requireNonNull(pattern, "参数 pattern 不能为 null");
-        DateTimeFormatter cached = FORMATTER_CACHE.get(pattern);
-        if (cached != null) {
-            return cached;
+        requireNonNull(pattern, "pattern");
+        if (pattern.trim().isEmpty()) {
+            throw new IllegalArgumentException("参数 pattern 不能为空白串");
         }
-        DateTimeFormatter created = DateTimeFormatter.ofPattern(pattern);
-        DateTimeFormatter previous = FORMATTER_CACHE.putIfAbsent(pattern, created);
-        return previous == null ? created : previous;
+        return FORMATTER_CACHE.computeIfAbsent(pattern, DateTimeFormatter::ofPattern);
     }
 
     /** 校验非空并原样返回，便于在表达式中直接使用。 */
@@ -432,11 +467,132 @@ public final class DateUtils {
         return value;
     }
 
-    /** 校验字符串非空并去掉首尾空格。 */
-    private static String trimAndRequire(String text, String name) {
-        if (text == null) {
-            throw new NullPointerException("参数 " + name + " 不能为 null");
+    /** 断言两个对象相等（含 null），失败时抛出带「期望 / 实际」的 {@link AssertionError}。 */
+    private static void assertEquals(Object expected, Object actual, String message) {
+        if (!Objects.equals(expected, actual)) {
+            throw new AssertionError(message + " 失败：期望 [" + expected + "]，实际 [" + actual + "]");
         }
-        return text.trim();
+    }
+
+    /** 断言两个整数相等，失败时抛出带「期望 / 实际」的 {@link AssertionError}。 */
+    private static void assertEquals(long expected, long actual, String message) {
+        if (expected != actual) {
+            throw new AssertionError(message + " 失败：期望 [" + expected + "]，实际 [" + actual + "]");
+        }
+    }
+
+    /** 断言条件成立，失败时抛出 {@link AssertionError}。 */
+    private static void assertTrue(boolean condition, String message) {
+        if (!condition) {
+            throw new AssertionError(message + " 失败");
+        }
+    }
+
+    /**
+     * 断言执行体抛出指定类型的运行时异常。
+     *
+     * <p>不引入测试框架时的轻量替代：抛对了直接通过，抛错类型或没抛都给出中文说明。
+     */
+    private static void assertThrows(Class<? extends Exception> expectedType, Runnable action, String message) {
+        try {
+            action.run();
+        } catch (Exception e) {
+            if (expectedType.isInstance(e)) {
+                return;
+            }
+            throw new AssertionError(message + " 失败：期望抛出 " + expectedType.getSimpleName()
+                    + "，实际抛出 " + e.getClass().getName(), e);
+        }
+        throw new AssertionError(message + " 失败：期望抛出 " + expectedType.getSimpleName() + "，但没有抛出任何异常");
+    }
+
+    // ------------------------------------------------------------------
+    // main 自测入口
+    // ------------------------------------------------------------------
+
+    /**
+     * 自测入口：断言用例均使用固定日期（2026-09-25 是星期五、2026 年 9 月共 30 天），
+     * 不依赖「今天」，任何时间运行结果都一致、问题可复现。
+     *
+     * @param args 命令行参数，未使用
+     */
+    public static void main(String[] args) {
+        LocalDate date = LocalDate.of(2026, 9, 25);
+        LocalDateTime dateTime = LocalDateTime.of(2026, 9, 25, 13, 20, 30);
+
+        // ------------------ 示例演示 ------------------
+        System.out.println("format(date) = " + format(date));
+        System.out.println("format(dateTime) = " + format(dateTime));
+        System.out.println("formatCompact(dateTime) = " + formatCompact(dateTime));
+        System.out.println("formatTime(dateTime) = " + formatTime(dateTime));
+        System.out.println("format(dateTime, \"yyyy年MM月dd日\") = " + format(dateTime, "yyyy年MM月dd日"));
+        System.out.println("formatSeconds(3725) = " + formatSeconds(3725));
+        System.out.println("age(1990-06-15) = " + age(LocalDate.of(1990, 6, 15)));
+
+        // ------------------ 断言自测 ------------------
+        // 格式化与解析
+        assertEquals("2026-09-25", format(date), "默认格式化日期");
+        assertEquals("2026-09-25 13:20:30", format(dateTime), "默认格式化日期时间");
+        assertEquals("20260925132030", formatCompact(dateTime), "紧凑格式化");
+        assertEquals("13:20:30", formatTime(dateTime), "只格式化时间部分");
+        assertEquals("2026年09月25日", format(date, "yyyy年MM月dd日"), "按指定格式格式化");
+        assertEquals(date, parseDate("2026-09-25"), "按默认格式解析日期");
+        assertEquals(date, parseDate(" 2026/09/25 ", "yyyy/MM/dd"), "按指定格式解析并自动去掉首尾空格");
+        assertEquals(dateTime, parseDateTime("2026-09-25 13:20:30"), "按默认格式解析日期时间");
+        assertEquals(date, parseDateTimeToDate("2026-09-25 13:20:30"), "解析日期时间并取日期部分");
+        // 先格式化再解析，应还原出同一个日期（往返一致性）
+        assertEquals(date, parseDate(format(date)), "日期格式化解析往返一致");
+
+        // 时间戳互转：只断言「转过去再转回来」结果不变，这样不依赖运行机器的时区设置
+        assertEquals(dateTime, ofEpochMilli(toEpochMilli(dateTime)), "毫秒时间戳往返");
+        assertEquals(dateTime, ofEpochSecond(toEpochSecond(dateTime)), "秒级时间戳往返");
+
+        // 一天的起止时刻
+        assertEquals(LocalDateTime.of(2026, 9, 25, 0, 0), startOfDay(date), "一天起点");
+        assertEquals(LocalDateTime.of(2026, 9, 25, 23, 59, 59, 999_999_999), endOfDay(date), "一天终点（纳秒精度）");
+        assertEquals(LocalDateTime.of(2026, 9, 25, 23, 59, 59, 999_000_000), endOfDayOfMilli(date), "一天终点（毫秒精度）");
+        assertEquals(LocalDateTime.of(2026, 9, 25, 23, 59), endOfDayOfMinute(date), "一天终点（分钟精度）");
+
+        // 月、周、年的边界
+        assertEquals(LocalDateTime.of(2026, 9, 1, 0, 0), startOfMonth(date), "月初起点");
+        assertEquals(LocalDateTime.of(2026, 9, 30, 23, 59, 59, 999_999_999), endOfMonth(date), "月末终点");
+        assertEquals(LocalDate.of(2026, 9, 21), firstDayOfWeek(date), "所在周周一（2026-09-25 是周五）");
+        assertEquals(LocalDate.of(2026, 9, 27), lastDayOfWeek(date), "所在周周日");
+        assertEquals(LocalDate.of(2026, 7, 1), firstDayOfQuarter(date), "所在季度首日");
+        assertEquals(LocalDate.of(2026, 1, 1), firstDayOfYear(date), "所在年首日");
+        assertEquals(LocalDate.of(2026, 12, 31), lastDayOfYear(date), "所在年末日");
+
+        // 比较与差值
+        assertTrue(isSameDay(date, LocalDate.of(2026, 9, 25)), "同一天判断");
+        assertTrue(!isSameDay(dateTime, dateTime.plusDays(1)), "不同天判断");
+        assertTrue(isBetween(dateTime, startOfDay(date), endOfDayOfMinute(date)), "闭区间之内");
+        assertTrue(!isBetween(startOfDay(date).minusNanos(1), startOfDay(date), endOfDay(date)), "闭区间之外");
+        assertTrue(isOverlap(dateTime, dateTime.plusHours(2), dateTime.plusHours(1), dateTime.plusHours(3)), "时间段相交");
+        assertTrue(isOverlap(dateTime, dateTime.plusHours(1), dateTime.plusHours(1), dateTime.plusHours(2)), "首尾相接也算相交");
+        assertTrue(!isOverlap(dateTime, dateTime.plusHours(1), dateTime.plusHours(2), dateTime.plusHours(3)), "时间段分离");
+        assertEquals(24L, daysBetween(LocalDate.of(2026, 9, 1), date), "相差天数");
+        assertEquals(3L, monthsBetween(LocalDate.of(2026, 6, 25), date), "相差月数");
+        assertEquals(6L, yearsBetween(LocalDate.of(2020, 9, 25), date), "相差年数");
+        assertEquals(3_600_000L, millisBetween(dateTime, dateTime.plusHours(1)), "相差毫秒数");
+        assertEquals(36, age(LocalDate.of(1990, 6, 15), date), "周岁年龄");
+        assertThrows(IllegalArgumentException.class, () -> age(LocalDate.of(2027, 1, 1), date), "未来生日应拒绝");
+
+        // 其它小工具
+        assertTrue(isLeapYear(2024), "2024 是闰年");
+        assertTrue(!isLeapYear(2026), "2026 不是闰年");
+        assertTrue(isLeapYear(date.withYear(2024)), "isLeapYear(LocalDate) 重载");
+        assertEquals(29, lengthOfMonth(LocalDate.of(2024, 2, 1)), "闰年 2 月有 29 天");
+        assertEquals("01:01:01", formatSeconds(3661), "秒数格式化");
+        assertEquals("25:00:00", formatSeconds(90_000), "超过 24 小时继续累加小时");
+        assertThrows(IllegalArgumentException.class, () -> formatSeconds(-1), "负数秒应拒绝");
+        assertEquals(LocalDateTime.of(2026, 9, 25, 13, 20), truncateToMinute(dateTime), "截断到分钟");
+        assertEquals(LocalDateTime.of(2026, 9, 25, 13, 50), plusMinutesAndTruncate(dateTime, 30), "加 30 分钟再截断");
+
+        // 参数校验
+        assertThrows(NullPointerException.class, () -> format(date, null), "格式串为 null 应拒绝");
+        assertThrows(IllegalArgumentException.class, () -> format(date, "  "), "空白格式串应拒绝");
+        assertThrows(java.time.format.DateTimeParseException.class, () -> parseDate("不是日期"), "非法日期串应抛出解析异常");
+
+        System.out.println("DateUtils 自测通过");
     }
 }
