@@ -29,3 +29,6 @@ bin/
 .DS_Store
 
 .idea
+
+### Firecrawl 网页抓取产物 ###
+.firecrawl/
