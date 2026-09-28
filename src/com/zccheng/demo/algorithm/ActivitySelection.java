@@ -317,7 +317,13 @@ public final class ActivitySelection {
         for (int round = 1; round <= rounds; round++) {
             int size = random.nextInt(17); // 0 ~ 16，保证暴力枚举可行
             List<Activity> activities = randomActivities(size, random.nextLong());
-            verify("随机压测第 " + round + " 轮（" + size + " 个活动）", activities);
+            verify("随机压测第 " + round + " 轮（" + size +
+
+
+
+
+
+                    " 个活动）", activities);
         }
         System.out.println("  [通过] 活动选择：随机压测 " + rounds + " 轮全部通过（含暴力枚举对照）");
     }

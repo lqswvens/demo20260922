@@ -1,4 +1,4 @@
-package com.zccheng.demo;
+package com.zccheng.demo.util;
 
 import java.util.ArrayList;
 import java.util.Arrays;

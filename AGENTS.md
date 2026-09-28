@@ -55,7 +55,9 @@ src/
   com/zccheng/demo/
     B.java                                 空类骨架（练习用，内容可自由替换）
     PartDemo.java                          装箱 / 分组逻辑演示
-    DateUtils.java                         日期时间工具类（基于 java.time）
+    util/                                  通用工具包（工具类统一放这里）
+      StringUtils.java                     字符串工具类（空值判断、驼峰转换等）
+      DateUtils.java                       日期时间工具类（基于 java.time）
     algorithm/                             排序算法合集
       SortAlgorithm.java                   排序统一接口（函数式接口 + 默认方法）
       AbstractSortAlgorithm.java           抽象父类：参数校验、元素交换、有序性判断
