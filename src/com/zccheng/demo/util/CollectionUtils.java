@@ -173,7 +173,6 @@ public final class CollectionUtils {
         return isEmpty(list) ? defaultList : list;
     }
 
-
     // ------------------------------------------------------------------
     // 安全取值
     // ------------------------------------------------------------------
@@ -234,7 +233,6 @@ public final class CollectionUtils {
         return list.get(index);
     }
 
-
     // ------------------------------------------------------------------
     // 创建集合
     // ------------------------------------------------------------------
@@ -256,10 +254,13 @@ public final class CollectionUtils {
     @SafeVarargs
     public static <T> List<T> newArrayList(T... elements) {
         List<T> list = new ArrayList<T>(elements.length);
-        Collections.addAll(list, elements);
+        // 这里刻意不用 Collections.addAll(list, elements)：把泛型数组当 varargs 实参转发出去时，
+        // 编译器会再报一条 varargs 堆污染警告，逐个 add 反而更直白，也没有任何警告
+        for (T element : elements) {
+            list.add(element);
+        }
         return list;
     }
-
 
     // ------------------------------------------------------------------
     // 去重、过滤、映射
@@ -329,7 +330,6 @@ public final class CollectionUtils {
         }
         return result;
     }
-
 
     // ------------------------------------------------------------------
     // 分组与转换
@@ -415,7 +415,6 @@ public final class CollectionUtils {
         return result;
     }
 
-
     // ------------------------------------------------------------------
     // 切分与分页
     // ------------------------------------------------------------------
@@ -486,7 +485,6 @@ public final class CollectionUtils {
         return new ArrayList<T>(list.subList((int) from, (int) to));
     }
 
-
     // ------------------------------------------------------------------
     // 集合运算
     // ------------------------------------------------------------------
@@ -549,18 +547,176 @@ public final class CollectionUtils {
         return new ArrayList<T>(result);
     }
 
-
     // ------------------------------------------------------------------
     // 内部辅助方法
     // ------------------------------------------------------------------
 
-    // __ASSERT_HELPERS__
+    /** 断言两个对象相等（含 null），失败时抛出带「期望 / 实际」的 {@link AssertionError}。 */
+    private static void assertEquals(Object expected, Object actual, String message) {
+        if (!Objects.equals(expected, actual)) {
+            throw new AssertionError(message + " 失败：期望 [" + expected + "]，实际 [" + actual + "]");
+        }
+    }
+
+    /** 断言两个整数相等，失败时抛出带「期望 / 实际」的 {@link AssertionError}。 */
+    private static void assertEquals(int expected, int actual, String message) {
+        if (expected != actual) {
+            throw new AssertionError(message + " 失败：期望 [" + expected + "]，实际 [" + actual + "]");
+        }
+    }
+
+    /** 断言条件成立，失败时抛出 {@link AssertionError}。 */
+    private static void assertTrue(boolean condition, String message) {
+        if (!condition) {
+            throw new AssertionError(message + " 失败");
+        }
+    }
+
+    /**
+     * 断言执行体抛出指定类型的异常。
+     *
+     * <p>不引入测试框架时的轻量替代：抛对了直接通过，抛错类型或没抛都给出中文说明。
+     */
+    private static void assertThrows(Class<? extends Exception> expectedType, Runnable action, String message) {
+        try {
+            action.run();
+        } catch (Exception e) {
+            if (expectedType.isInstance(e)) {
+                return;
+            }
+            throw new AssertionError(message + " 失败：期望抛出 " + expectedType.getSimpleName()
+                    + "，实际抛出 " + e.getClass().getName(), e);
+        }
+        throw new AssertionError(message + " 失败：期望抛出 " + expectedType.getSimpleName() + "，但没有抛出任何异常");
+    }
 
     // ------------------------------------------------------------------
     // main 自测入口：先打印示例建立直觉，再跑标准断言
     // ------------------------------------------------------------------
 
-    // __MAIN__
+    /**
+     * 自测入口：先打印各方法的典型输出建立直觉，再执行一组断言，全部通过后输出「通过」字样。
+     *
+     * <p>所有用例都使用固定数据，不依赖系统时间、随机数与环境变量，任何机器上跑结果都一样。
+     *
+     * @param args 命令行参数，未使用
+     */
+    public static void main(String[] args) {
+        // ------------------ 示例演示 ------------------
+        List<Integer> numbers = newArrayList(3, 1, 3, 2);
+        System.out.println("isEmpty((Collection<?>) null) = " + isEmpty((Collection<?>) null));
+        System.out.println("emptyIfNull(null).size() = " + emptyIfNull((Collection<Integer>) null).size());
+        System.out.println("firstElement([3, 1, 3, 2]) = " + firstElement(numbers));
+        System.out.println("lastElement([3, 1, 3, 2]) = " + lastElement(numbers));
+        System.out.println("getOrDefault([3, 1, 3, 2], 9, -1) = " + getOrDefault(numbers, 9, -1));
+        System.out.println("distinct([3, 1, 3, 2]) = " + distinct(numbers));
+        System.out.println("filter(n > 1) = " + filter(numbers, n -> n > 1));
+        System.out.println("map(n * 2) = " + map(numbers, n -> n * 2));
+        System.out.println("groupBy(奇偶) = " + groupBy(numbers, n -> n % 2 == 0 ? "偶数" : "奇数"));
+        System.out.println("toMap(数字 -> 平方) = " + toMap(newArrayList(1, 2, 3), n -> n, n -> n * n));
+        System.out.println("partition([3, 1, 3, 2], 3) = " + partition(numbers, 3));
+        System.out.println("page([3, 1, 3, 2], 2, 3) = " + page(numbers, 2, 3));
+        System.out.println("union([1, 2, 2], [2, 3]) = " + union(newArrayList(1, 2, 2), newArrayList(2, 3)));
+        System.out.println("intersection([1, 2, 3], [2, 3, 4]) = "
+                + intersection(newArrayList(1, 2, 3), newArrayList(2, 3, 4)));
+        System.out.println("difference([1, 2, 3], [2]) = "
+                + difference(newArrayList(1, 2, 3), newArrayList(2)));
 
-    // __THE_END__
+        // ------------------ 断言自测 ------------------
+        // 空值判断：null 与「空壳」（空集合 / 空 Map / 空数组）都算空
+        assertTrue(isEmpty((Collection<String>) null), "null 集合应判为空");
+        assertTrue(isEmpty(Collections.<String>emptyList()), "空集合应判为空");
+        assertTrue(isNotEmpty(newArrayList("a")), "有元素的集合应判为非空");
+        assertTrue(isEmpty((Map<String, String>) null), "null Map 应判为空");
+        assertTrue(isNotEmpty(Collections.singletonMap("k", "v")), "有键值对的 Map 应判为非空");
+        assertTrue(isEmpty(new String[0]), "空数组应判为空");
+        assertTrue(isNotEmpty(new String[] {"a"}), "有元素的数组应判为非空");
+
+        // null 归一与默认值
+        assertEquals(0, emptyIfNull((Collection<String>) null).size(), "null 集合应归一为空集合");
+        assertEquals(1, emptyIfNull(Collections.singletonList("a")).size(), "非 null 集合应原样返回");
+        assertEquals(0, emptyIfNull((Map<String, String>) null).size(), "null Map 应归一为空 Map");
+        assertEquals(newArrayList("默认"), defaultIfEmpty(null, newArrayList("默认")), "null 列表应返回默认值");
+        assertEquals(newArrayList("默认"), defaultIfEmpty(new ArrayList<String>(), newArrayList("默认")),
+                "空列表应返回默认值");
+        List<String> kept = newArrayList("原值");
+        assertTrue(kept == defaultIfEmpty(kept, newArrayList("默认")), "非空列表应原样返回同一个引用");
+        assertThrows(UnsupportedOperationException.class,
+                () -> emptyIfNull((Collection<String>) null).add("x"), "归一得到的是共享空集合，不可写入");
+        assertThrows(NullPointerException.class,
+                () -> defaultIfEmpty(newArrayList("a"), null), "默认列表为 null 应拒绝");
+
+        // 安全取值
+        assertEquals("a", firstElement(newArrayList("a", "b")), "取第一个元素");
+        assertEquals(null, firstElement(Collections.<String>emptyList()), "空集合取第一个元素应返回 null");
+        assertEquals("b", lastElement(newArrayList("a", "b")), "取最后一个元素");
+        assertEquals(null, lastElement(Collections.<String>emptyList()), "空列表取最后一个元素应返回 null");
+        assertEquals("b", getOrDefault(newArrayList("a", "b"), 1, "缺省"), "下标合法时应取到对应元素");
+        assertEquals("缺省", getOrDefault(newArrayList("a", "b"), 5, "缺省"), "下标过大应返回默认值");
+        assertEquals("缺省", getOrDefault(newArrayList("a", "b"), -1, "缺省"), "负下标应返回默认值");
+
+        // 创建集合
+        List<String> created = newArrayList("a", "b");
+        created.add("c");
+        assertEquals(3, created.size(), "newArrayList 返回的列表必须可写");
+        assertEquals(0, newArrayList().size(), "newArrayList 允许一个元素都不传");
+        assertEquals(1, newArrayList((String) null).size(), "newArrayList 允许 null 元素");
+
+        // 去重、过滤、映射
+        assertEquals(newArrayList(3, 1, 2), distinct(newArrayList(3, 1, 3, 2)), "去重应保留元素首次出现的顺序");
+        assertEquals(newArrayList(3, 3), filter(newArrayList(3, 1, 3, 2), n -> n > 2), "过滤应只保留满足条件的元素");
+        assertEquals(newArrayList(6, 2, 6, 4), map(newArrayList(3, 1, 3, 2), n -> n * 2), "映射应逐个转换且保持顺序");
+        assertEquals(0, filter(newArrayList(1, 2), n -> n > 9).size(), "没有元素满足条件时应返回空列表");
+
+        // 分组与转换
+        Map<String, List<Integer>> byParity = groupBy(newArrayList(3, 1, 2), n -> n % 2 == 0 ? "偶数" : "奇数");
+        assertEquals(newArrayList(3, 1), byParity.get("奇数"), "奇数分组的内容与顺序");
+        assertEquals(newArrayList(2), byParity.get("偶数"), "偶数分组的内容与顺序");
+        assertEquals(newArrayList("奇数", "偶数"), new ArrayList<String>(byParity.keySet()),
+                "分组 key 应按首次出现的顺序排列");
+        Map<String, List<Integer>> nullKeyGrouped = groupBy(newArrayList(1, 2), n -> (String) null);
+        assertTrue(nullKeyGrouped.containsKey(null), "key 算成 null 时也应正常分组");
+
+        Map<String, Integer> lengths = toMap(newArrayList("a", "bb", "ccc"), s -> s, String::length);
+        assertEquals(3, lengths.get("ccc").intValue(), "转 Map 的 value 应逐个计算");
+        assertEquals(newArrayList("a", "bb", "ccc"), new ArrayList<String>(lengths.keySet()), "转 Map 的结果应保序");
+        assertThrows(IllegalArgumentException.class,
+                () -> toMap(newArrayList("a", "a"), s -> s, String::length), "重复 key 应直接拒绝");
+        assertThrows(NullPointerException.class,
+                () -> toMap(newArrayList("a"), s -> (String) null, String::length), "key 为 null 应直接拒绝");
+
+        // 切分与分页
+        assertEquals(newArrayList(newArrayList(1, 2, 3), newArrayList(4, 5)),
+                partition(newArrayList(1, 2, 3, 4, 5), 3), "按容量切分，最后一段允许不满");
+        assertEquals(0, partition(Collections.<Integer>emptyList(), 3).size(), "空列表切分后没有任何段");
+        List<Integer> source = newArrayList(1, 2, 3);
+        List<List<Integer>> parts = partition(source, 2);
+        parts.get(0).add(99);
+        assertEquals(newArrayList(1, 2, 3), source, "切分返回的是拷贝，改某一段不会影响原列表");
+
+        assertEquals(newArrayList(4, 5), page(newArrayList(1, 2, 3, 4, 5), 2, 3), "第 2 页（每页 3 条）应取第 4、5 条");
+        assertEquals(newArrayList(1, 2, 3), page(newArrayList(1, 2, 3), 1, 3), "最后一页不足整页时只返回剩余元素");
+        assertEquals(0, page(newArrayList(1, 2, 3), 9, 3).size(), "页码超过总页数应返回空列表");
+        assertEquals(0, page(newArrayList(1, 2, 3), 0, 3).size(), "页码小于 1 应返回空列表");
+        assertThrows(IllegalArgumentException.class, () -> page(newArrayList(1), 1, 0), "每页条数不能为 0");
+        assertThrows(IllegalArgumentException.class, () -> partition(newArrayList(1), -1), "每段容量不能为负");
+
+        // 集合运算
+        assertEquals(newArrayList(1, 2, 3), union(newArrayList(1, 2, 2), newArrayList(2, 3)), "并集应去重且保序");
+        assertEquals(newArrayList(2, 3), intersection(newArrayList(1, 2, 3), newArrayList(2, 3, 4)), "交集应保序");
+        assertEquals(newArrayList(1), difference(newArrayList(1, 2, 3), newArrayList(2, 3)), "差集应保序");
+        assertEquals(0, intersection(newArrayList(1), newArrayList(2)).size(), "没有公共元素时交集为空");
+        assertEquals(newArrayList(3), difference(newArrayList(3), Collections.<Integer>emptyList()),
+                "与空集合求差集应得到原集合");
+
+        // 参数校验：不允许 null 的方法必须尽早报错
+        assertThrows(NullPointerException.class, () -> firstElement((Collection<String>) null),
+                "firstElement 收到 null 集合应拒绝");
+        assertThrows(NullPointerException.class, () -> distinct((Collection<String>) null),
+                "distinct 收到 null 集合应拒绝");
+        assertThrows(NullPointerException.class, () -> filter(newArrayList(1), null), "过滤条件为 null 应拒绝");
+        assertThrows(NullPointerException.class, () -> groupBy(newArrayList(1), null), "分组依据为 null 应拒绝");
+
+        System.out.println("CollectionUtils 自测通过");
+    }
 }
