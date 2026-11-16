@@ -19,6 +19,10 @@ public class A {
         System.out.println(111111111);
         System.out.println(111111111);
         System.out.println(111111111);
+        new Thread().start();
+        new Thread().start();
+        new Thread().start();
+        new Thread().start();
         System.out.println(111111111);
     }
 }
