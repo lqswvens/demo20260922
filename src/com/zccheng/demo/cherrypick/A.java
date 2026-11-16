@@ -9,11 +9,25 @@ public class A {
         for (int i = 0; i < 10; i++) {
             System.out.println(123321312);
         }
+        for (int i = 0; i < 10; i++) {
+            System.out.println(123321312);
+        }for (int i = 0; i < 10; i++) {
+            System.out.println(123321312);
+        }
+        for (int i = 0; i < 10; i++) {
+            System.out.println(123321312);
+        }for (int i = 0; i < 10; i++) {
+            System.out.println(123321312);
+        }
         System.out.println(111111111);
         System.out.println(111111111);
         System.out.println(111111111);
         System.out.println(111111111);
         System.out.println(111111111);
+        new Thread().start();
+        new Thread().start();
+        new Thread().start();
+        new Thread().start();
         System.out.println(111111111);
     }
 }
